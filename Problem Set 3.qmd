@@ -13,6 +13,7 @@ library(haven)
 library(tidyverse)
 library(broom)
 library(pscl)
+library(emmeans)
 ```
 
 ## Problem 1
@@ -141,13 +142,26 @@ m_2L <- glm(tymp_left ~ gender + citizenship +
             data = tymp_demo, family = poisson)
 ```
 
-```{r incidence_risk_ratios}
+```{r irr_fucntion}
+#' irr: compute the estimated incidence risk ratios for the coefficients
+#' 
+#' This function takes a fitted Poisson regression model and computes the 
+#' estimated incidence risk ratios for each coefficient and tags each row 
+#' with the model name provided.
+#'
+#' @param fit A fitted model object 
+#' @param model_name A character string giving a name or label for the model.
+#' @return A data frame with 3 columns: model, term, and IRR
+
 irr <- function(fit, model_name){
   tidy(fit) %>% 
     mutate(model = model_name,
            IRR = exp(estimate)) %>% 
     select(model, term, IRR)
 }
+```
+
+```{r incidence_risk_ratios}
 
 rbind(irr(m_1R, "Model 1"), 
       irr(m_2R, "Model 2"), 
@@ -169,16 +183,25 @@ rbind(irr(m_1R, "Model 1"),
   
   kable(caption = "Incidence Risk Ratios by Models", 
         align = c("l","c","c","c","c"))
-
 ```
 
-```{r statistics_glm}
+```{r model_stats_function}
+#' model_stats: compute key model statistics
+#' 
+#' Computes sample size (N), McFadden's pseudo-R², and AIC for a 
+#' fitted Poisson regression model
+#' 
+#' @param model A fitted model object
+#' @return A named numeric vector with 3 elements
+
 model_stats <- function(model) {
   return(c(N = length(model$fitted.values),
     R2 = pR2(model)["McFadden"],
     AIC = AIC(model)))
 }
+```
 
+```{r statistics_glm}
 stats_raw <- cbind(model_stats(m_1R),
                    model_stats(m_2R),
                    model_stats(m_1L),
@@ -192,11 +215,28 @@ rownames(stats_table) <- c("Sample Size", "Pseudo R²", "AIC")
 colnames(stats_table) <- c("Model 1", "Model 2", "Model 3", "Model 4")
 
 kable(stats_table, caption = "Model Statistics")
-
 ```
 
 Note:
 
 To treat annual household income as a continuous predictor, I treated the numeric labels of the groups as continuous, for which I converted the ordered income categories to numeric ranks from 1 (lowest) to 12 (highest), using `income_rank = as.integer(annual_income_range)`.
 
-d\. From model 2L, provide evidence whether there is a difference between males and females in terms of their incidence risk ratio. Test whether the predicted value of Tympanometric width measure of the left ear differs between men and women. Include the results of the each test and their interpretation.
+d\. From model 2L, provide evidence whether there is a **difference between males and females** in terms of their incidence risk ratio. **Test whether the predicted value** of Tympanometric width measure of the left ear **differs between men and women**. Include the results of the **each test** and their **interpretation**.
+
+```{r}
+summary(m_2L)
+```
+
+```{r}
+emmeans(m_2L, ~ gender, type = "response")
+```
+
+```{r}
+pairs(emmeans(m_2L, ~ gender, type = "response"))
+```
+
+Answer:
+
+From the summary output of model 2L and Table 2, we can see that the p-value for the gender coefficient is very small, and the IRR is slightly above 1. This provides strong evidence that females differ from males in their expected tympanometric width, after adjusting for other variables. On average, females have about 1.9% higher expected width than males.
+
+To test whether the predicted tympanometric width of the left ear differs between men and women, I used the `emmeans()` function with model 2L. The estimated ratio (male vs. female) of predicted means was 0.982 with a p-value \< 0.0001, indicating that this difference is statistically significant. Therefore, we can conclude that males have significantly lower predicted tympanometric width than females, after adjusting for other variables.
