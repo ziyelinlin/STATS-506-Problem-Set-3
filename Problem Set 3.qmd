@@ -14,6 +14,9 @@ library(tidyverse)
 library(broom)
 library(pscl)
 library(emmeans)
+library(DBI)
+library(RSQLite)
+library(microbenchmark)
 ```
 
 ## Problem 1
@@ -240,3 +243,211 @@ Answer:
 From the summary output of model 2L and Table 2, we can see that the p-value for the gender coefficient is very small, and the IRR is slightly above 1. This provides strong evidence that females differ from males in their expected tympanometric width, after adjusting for other variables. On average, females have about 1.9% higher expected width than males.
 
 To test whether the predicted tympanometric width of the left ear differs between men and women, I used the `emmeans()` function with model 2L. The estimated ratio (male vs. female) of predicted means was 0.982 with a p-value \< 0.0001, indicating that this difference is statistically significant. Therefore, we can conclude that males have significantly lower predicted tympanometric width than females, after adjusting for other variables.
+
+## Problem 2 **Sakila**
+
+For these problems, **do not** use any of the tables whose names end in `_list`.
+
+For each of the following questions, solve them in two ways:
+
+-   First, use SQL query or queries to extract the appropriate table(s), then use regular R operations on those `data.frame`s to answer the question.
+
+-   Second, use a single SQL query to answer the question.
+
+Compare each approach using microbenchmark.
+
+```{r}
+sakila <- dbConnect(RSQLite::SQLite(), "sakila_master.db")
+dbListTables(sakila)
+```
+
+```{r}
+#' get_query: run a SQL query on the sakila database
+#' 
+#' @param query A character string containing a valid SQL query.
+#' @return A data frame with the result of the SQL query.
+get_query <- function(query) dbGetQuery(sakila, query)
+```
+
+a\. For each store, how many customers does that store have, and what percentage of customers of that store are active in the system?
+
+```{r r_version_2a}
+customer <- dbReadTable(sakila, "customer")
+customer_summary_r_2a <- customer %>% 
+  group_by(store_id) %>% 
+  summarise(customer_count = n(),
+            percent_active = round(mean(active == 1) * 100,2))
+
+kable(customer_summary_r_2a, 
+      caption = "Customer counts and percent active by store (R version)")
+```
+
+```{r sql_version_2a}
+customer_summary_sql_2a <- get_query("
+SELECT store_id,
+       COUNT(*) AS customer_count,
+       ROUND(AVG(active = 1)* 100, 2) AS percent_active
+  FROM customer
+ GROUP BY store_id
+                                     ")
+
+kable(customer_summary_sql_2a, 
+      caption = "Customer counts and percent active by store (SQL version)")
+```
+
+```{r time_comparison_2a}
+microbenchmark(
+  R = {
+    dbReadTable(sakila, "customer") %>% 
+      group_by(store_id) %>% 
+      summarise(customer_count = n(), 
+                percent_active = round(mean(active == 1) * 100,2))
+  },
+  
+  SQL = {
+    get_query("
+      SELECT store_id,
+             COUNT(*) AS customer_count,
+             ROUND(AVG(active = 1)* 100, 2) AS percent_active
+        FROM customer
+       GROUP BY store_id
+    ")
+  },
+  times = 20,
+  unit = "ms"
+)
+```
+
+Answer:
+
+Store 1 has 326 customers and 97.55% of customers are active in the system. Store 2 has 273 customers and 97.44% of customers are active in the system. Based on the microbenchmark results, the SQL approach was much faster than the R approach.
+
+b\. Generate a table identifying the names and country of **each staff member**.
+
+```{r r_version_2b}
+staff <- dbReadTable(sakila, "staff")
+address <- dbReadTable(sakila, "address")
+city <- dbReadTable(sakila, "city")
+country <- dbReadTable(sakila, "country")
+
+staff_country_r <- staff %>% 
+  left_join(address, by = "address_id") %>% 
+  left_join(city, by = "city_id") %>% 
+  left_join(country, by = "country_id") %>% 
+  select(first_name, last_name, country)
+
+kable(staff_country_r, caption = "Staff Information (R version)")
+```
+
+```{r sql_version_2b}
+staff_country_sql <- get_query("
+SELECT first_name,
+       last_name,
+       country
+  FROM staff AS s
+       LEFT JOIN address AS a ON s.address_id = a.address_id
+       LEFT JOIN city AS c ON a.city_id = c.city_id
+       LEFT JOIN country AS co ON co.country_id = c.country_id
+                               ")
+
+kable(staff_country_sql, caption = "Staff Information (SQL version)")
+```
+
+```{r time_comparison_2b}
+microbenchmark(
+  R = {
+    staff <- dbReadTable(sakila, "staff")
+    address <- dbReadTable(sakila, "address")
+    city <- dbReadTable(sakila, "city")
+    country <- dbReadTable(sakila, "country")
+    
+    staff_country_r <- staff %>% 
+      left_join(address, by = "address_id") %>% 
+      left_join(city, by = "city_id") %>% 
+      left_join(country, by = "country_id") %>% 
+      select(first_name, last_name, country)
+  },
+  SQL = {
+    staff_country_sql <- get_query("
+      SELECT first_name,
+             last_name,
+             country
+        FROM staff AS s
+             LEFT JOIN address AS a ON s.address_id = a.address_id
+             LEFT JOIN city AS c ON a.city_id = c.city_id
+             LEFT JOIN country ON country.country_id = c.country_id
+                               ")
+  },
+  times = 20,
+  unit = "ms"
+)
+```
+
+Answer:
+
+Mike Hillyer is from Canada and Jon Stephens is from Australia. Again, SQL approach was much faster.
+
+c\. Identify the **name(s)** of the film(s) which was/were rented for the **highest dollar value**. (Assume all costs are in USD regardless of country.) (Hint: You can merge a table more than once.)
+
+```{r r_version_2c}
+payment <- dbReadTable(sakila, "payment")
+rental <- dbReadTable(sakila, "rental")
+inventory <- dbReadTable(sakila, "inventory")
+film <- dbReadTable(sakila, "film")
+
+highest_rentals_r <- payment %>% 
+  filter(amount == max(amount, na.rm = TRUE)) %>% 
+  left_join(rental, by = "rental_id") %>% 
+  left_join(inventory, by = "inventory_id") %>% 
+  left_join(film, by = "film_id") %>% 
+  select(title, amount)
+
+kable(highest_rentals_r, caption = "Films rented for the highest dollar value (R version)")
+```
+
+```{r sql_version_2c}
+highest_rentals_sql <- get_query("
+SELECT f.title, 
+       p.amount
+  FROM payment AS p
+       LEFT JOIN rental AS r ON p.rental_id = r.rental_id
+       LEFT JOIN inventory AS i ON r.inventory_id = i.inventory_id
+       LEFT JOIN film AS f ON i.film_id = f.film_id
+WHERE p.amount = (SELECT MAX(amount) FROM payment)")
+
+kable(highest_rentals_sql, caption = "Films rented for the highest dollar value (SQL version)")
+```
+
+```{r time_comparison_2c}
+microbenchmark(
+  R = {
+    payment <- dbReadTable(sakila, "payment")
+    rental <- dbReadTable(sakila, "rental")
+    inventory <- dbReadTable(sakila, "inventory")
+    film <- dbReadTable(sakila, "film")
+    
+    highest_rentals_r <- payment %>% 
+      filter(amount == max(amount, na.rm = TRUE)) %>% 
+      left_join(rental, by = "rental_id") %>% 
+      left_join(inventory, by = "inventory_id") %>% 
+      left_join(film, by = "film_id") %>% 
+      select(title, amount)
+  },
+  SQL = {
+    highest_rentals_sql <- get_query("
+      SELECT f.title, 
+             p.amount
+        FROM payment AS p
+             LEFT JOIN rental AS r ON p.rental_id = r.rental_id
+             LEFT JOIN inventory AS i ON r.inventory_id = i.inventory_id
+             LEFT JOIN film AS f ON i.film_id = f.film_id
+      WHERE p.amount = (SELECT MAX(amount) FROM payment)")
+  },
+  times = 20,
+  unit = "ms"
+)
+```
+
+Answer:
+
+10 films were rented for the highest dollar value of \$11.99. SQL approach was substantially faster.
