@@ -569,7 +569,7 @@ f\. [Benford’s law](https://en.wikipedia.org/wiki/Benford's_law) is an observa
 tab <- table(substr(apt_num, 1, 1))
 digits <- as.integer(names(tab))
 count <- as.integer(tab)
-pro <- count / sum(count)
+prop <- count / sum(count)
 
 benford <- log10(1 + 1/(1:9))
 
