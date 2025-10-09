@@ -5,7 +5,7 @@ format: pdf
 editor: visual
 ---
 
-#### GitHub Repository Link:
+#### GitHub Repository Link: <https://github.com/ziyelinlin/STATS-506-Problem-Set-3.git>
 
 ```{r package_loading}
 library(knitr)
@@ -33,7 +33,7 @@ dim(merged_df)
 
 **Answer**:
 
-Two files merged by `SEQN`, the returned data frame has 4582 rows and 119 columns.
+Merged two files by `SEQN`, the returned data frame has 4582 rows and 119 columns.
 
 b\. We’ll be using the **following variables.** Clean up each - ensure **all missing values are actually `NA`** (rather than `999` or something), and if it’s categorical, convert it to `factor` with informative `levels`.
 
@@ -90,7 +90,7 @@ tymp_demo <- tymp_demo_df %>%
                                       "$55,000–64,999",
                                       "$65,000–74,999",
                                       "$75,000–99,999",
-                                      "Over $100,000"))
+                                      "$100,000 and Over"))
          )
 ```
 
@@ -187,7 +187,7 @@ rbind(irr(m_1R, "Model 1"),
 
 ```{r model_stats_function}
 #' model_stats: Computes sample size (N), McFadden's pseudo-R², 
-#' and AIC for a fitted Poisson regression model
+#' and AIC for a fitted Poisson regression model.
 #' 
 #' @param model A fitted model object
 #' @return A named numeric vector with 3 elements
@@ -256,7 +256,7 @@ sakila <- dbConnect(RSQLite::SQLite(), "sakila_master.db")
 ```
 
 ```{r get_query_function}
-#' get_query: Run a SQL query on the sakila database
+#' get_query: Run a SQL query on the sakila database.
 #' 
 #' @param query A character string containing a valid SQL query.
 #' @return A data frame with the result of the SQL query.
@@ -459,8 +459,6 @@ dat <- read.csv("au-500.csv")
 a\. What **percentage** of the websites are **.com**’s (as opposed to .net, .com.au, etc)?
 
 ```{r}
-length(dat$email[grepl("\\.com$", dat$email)]) / nrow(dat)
-
 length(dat$web[grepl("\\.com$", dat$web)]) / nrow(dat)
 ```
 
@@ -502,7 +500,7 @@ Answer:
 
 If only consider non-alphabetic character with the exclusion of commas and white spaces, 45 company names contain a non-alphabetic character, which is 9%.
 
-If we decide to exclude &, then only 4 comapny names contain a non-alphabetic character, which is only 0.8%.
+If we decide to also exclude &, then only 4 company names contain a non-alphabetic character, which is only 0.8%.
 
 d\. In Australia, phone have 10 digits - but unlike in the US where we write all numbers as “123-456-7890”, they write land lines and cell phones differently:
 
@@ -513,7 +511,7 @@ d\. In Australia, phone have 10 digits - but unlike in the US where we write all
 There are two different phones listed for each record. Make **all** phone numbers written like **cell phones**. Show it works by printing the first 10 phone numbers of each column.
 
 ```{r cell_format_function}
-#' cell_format: Format phone numbers as Australian cell style 
+#' cell_format: Format phone numbers as Australian cell style. 
 #' 
 #' @param phone Character vector of phone numbers in arbitrary formats
 #' (may include spaces, dashes, parentheses, etc.)
@@ -547,21 +545,12 @@ I used `gsub()` instead of `strsplit()` so that it can handle any formatting of 
 e\. Produce a histogram of the **log of the apartment numbers** for all addresses. (You may assume **any number** **at the end** of the an address is an **apartment number.**)
 
 ```{r}
-has_apt_num <- dat$address[grepl("#[0-9]+$", dat$address)]
+has_apt_num <- dat$address[grepl("[0-9]+$", dat$address)]
 apt_num <- sapply(strsplit(has_apt_num, " "), function(add) add[length(add)])
 apt_num <- as.numeric(sub("#", "", apt_num))
 hist(log(apt_num),
      main = "Hostogram of apartment number on log scale")
 ```
-
-```{r}
-setdiff(dat$address[grepl("[0-9]+$", dat$address)], 
-        dat$address[grepl("#[0-9]+$", dat$address)])
-```
-
-Note:
-
-We treat any trailing number in an address as an apartment number and extract it accordingly. While this heuristic works for entries like “534 Schoenborn St #51,” it can mislabel some edge cases where the final number is part of the street name rather than a unit, for example “79 State Route 35”. Indeed, there are 5 edge cases. Therefore, I restricted extraction to addresses that end with digits but also come with common apartment token "\#".
 
 f\. [Benford’s law](https://en.wikipedia.org/wiki/Benford's_law) is an observation about the distribution of the **leading digit** of real numerical data. Examine whether the apartment numbers appear to follow Benford’s law. Do you think the apartment numbers would pass as real data?
 
@@ -578,7 +567,8 @@ data.frame(
   count = count,
   prop  = round(prop, 4),
   benford_prop = round(benford, 4)
-)
+) %>% 
+  kable(caption = "Distribution of leading digit of apartment numbers")
 ```
 
 Answer:
